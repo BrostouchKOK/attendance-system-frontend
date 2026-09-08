@@ -98,7 +98,6 @@ export default function ClassManagement() {
   const getTeacherName = (teacherProp) => {
     if (!teacherProp) return "មិនទាន់មាន";
 
-    // ប្រសិនបើជា Object (Populated ពី Backend)
     if (typeof teacherProp === "object" && teacherProp !== null) {
       return (
         teacherProp.nameKhmer ||
@@ -108,7 +107,6 @@ export default function ClassManagement() {
       );
     }
 
-    // ប្រសិនបើជា String ID (Fallback)
     const found = teachers.find((t) => String(t._id) === String(teacherProp));
     return found
       ? found.nameKhmer || found.nameLatin || found.name
@@ -119,7 +117,6 @@ export default function ClassManagement() {
     if (cls) {
       setEditingId(cls._id);
 
-      // ទាញយក Homeroom Teacher ID ជា String ឱ្យបានច្បាស់លាស់
       let hrTeacherId = "";
       if (cls.homeroomTeacher) {
         hrTeacherId =
@@ -128,7 +125,6 @@ export default function ClassManagement() {
             : String(cls.homeroomTeacher);
       }
 
-      // ទាញយក Assigned Teachers IDs ឱ្យប្រាកដប្រជា
       const assignedIds =
         cls.assignedTeachers?.map((t) =>
           typeof t === "object" && t !== null ? String(t._id) : String(t),
@@ -137,7 +133,7 @@ export default function ClassManagement() {
       setFormData({
         className: cls.className || "",
         academicYear: cls.academicYear || "2026-2027",
-        gradeLevel: cls.gradeLevel ? String(cls.gradeLevel) : "10",
+        gradeLevel: cls.gradeLevel ? String(cls.gradeLevel) : "",
         homeroomTeacher: hrTeacherId,
         assignedTeachers: assignedIds,
       });
@@ -147,7 +143,7 @@ export default function ClassManagement() {
         className: "",
         academicYear:
           selectedYearFilter !== "all" ? selectedYearFilter : "2026-2027",
-        gradeLevel: "10",
+        gradeLevel: "",
         homeroomTeacher: "",
         assignedTeachers: [],
       });
@@ -177,7 +173,6 @@ export default function ClassManagement() {
     e.preventDefault();
     setSubmitting(true);
 
-    // រៀបចំ payload ឱ្យស្អាត៖ បើ homeroomTeacher ជា "" ត្រូវប្តូរទៅ null
     const payload = {
       ...formData,
       homeroomTeacher:
@@ -196,7 +191,6 @@ export default function ClassManagement() {
       }
       setShowModal(false);
 
-      // ទាញយកបញ្ជី Class ឡើងវិញដើម្បីបង្ហាញទិន្នន័យថ្មី
       await fetchClasses();
 
       const yearsRes = await axiosInstance.get("/classes/academic-years");
@@ -465,19 +459,16 @@ export default function ClassManagement() {
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
                     កម្រិតថ្នាក់
                   </label>
-                  <select
+                  <input
+                    type="text"
+                    required
+                    placeholder="ឧ. 10"
                     value={formData.gradeLevel}
                     onChange={(e) =>
                       setFormData({ ...formData, gradeLevel: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 bg-white"
-                  >
-                    {[7, 8, 9, 10, 11, 12].map((g) => (
-                      <option key={g} value={g.toString()}>
-                        ថ្នាក់ទី {g}
-                      </option>
-                    ))}
-                  </select>
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500"
+                  />
                 </div>
               </div>
 

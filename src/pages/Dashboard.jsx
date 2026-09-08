@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { Users, BookOpen, CheckCircle, Clock } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import axiosInstance from "../api/axiosInstance";
+
+const DAYS_ORDER = ["ចន្ទ", "អង្គារ", "ពុធ", "ព្រហស្បតិ៍", "សុក្រ"];
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -8,6 +19,7 @@ export default function Dashboard() {
     totalClasses: 0,
     attendanceRate: "0%",
     absenceRate: "0%",
+    weeklyData: [],
   });
   const [loading, setLoading] = useState(true);
 
@@ -15,18 +27,40 @@ export default function Dashboard() {
     const fetchStats = async () => {
       try {
         setLoading(true);
+
         const [resStudents, resClasses, resAttendance] = await Promise.all([
-          axiosInstance.get("/students/count"),
-          axiosInstance.get("/classes/count"),
-          axiosInstance.get("/attendances/today-summary"),
+          axiosInstance
+            .get("/students/count")
+            .catch(() => ({ data: { count: 0 } })),
+          axiosInstance
+            .get("/classes/count")
+            .catch(() => ({ data: { count: 0 } })),
+          axiosInstance
+            .get("/attendances/today-summary")
+            .catch(() => ({ data: {} })),
         ]);
+
+        const attData = resAttendance.data || {};
+        const rawWeekly = attData.weeklySummary || [];
+
+        // តម្រៀបថ្ងៃឱ្យត្រូវតាមលំដាប់ ចន្ទ -> សុក្រ ជានិច្ច
+        const sortedWeekly = [...rawWeekly].sort((a, b) => {
+          return DAYS_ORDER.indexOf(a.day) - DAYS_ORDER.indexOf(b.day);
+        });
+
+        const defaultWeekly = DAYS_ORDER.map((day) => ({
+          day,
+          present: 0,
+          absent: 0,
+        }));
 
         setStats({
           totalStudents:
             resStudents.data?.count ?? resStudents.data?.totalStudents ?? 0,
           totalClasses: resClasses.data?.count ?? 0,
-          attendanceRate: resAttendance.data?.attendanceRate || "0%",
-          absenceRate: resAttendance.data?.absenceRate || "0%",
+          attendanceRate: attData.attendanceRate || "0%",
+          absenceRate: attData.absenceRate || "0%",
+          weeklyData: sortedWeekly.length > 0 ? sortedWeekly : defaultWeekly,
         });
       } catch (error) {
         console.error("Error fetching dashboard stats:", error);
@@ -40,24 +74,28 @@ export default function Dashboard() {
 
   const cards = [
     {
+      id: "students",
       title: "សិស្សសរុប",
       value: loading ? "..." : stats.totalStudents,
       icon: Users,
       color: "bg-blue-500",
     },
     {
+      id: "classes",
       title: "ថ្នាក់រៀនសរុប",
       value: loading ? "..." : stats.totalClasses,
       icon: BookOpen,
       color: "bg-indigo-500",
     },
     {
+      id: "attendance",
       title: "វត្តមានថ្ងៃនេះ",
       value: loading ? "..." : stats.attendanceRate,
       icon: CheckCircle,
       color: "bg-emerald-500",
     },
     {
+      id: "absence",
       title: "សិស្សអវត្តមាន",
       value: loading ? "..." : stats.absenceRate,
       icon: Clock,
@@ -67,21 +105,23 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-800">
           ផ្ទាំងគ្រប់គ្រង (Dashboard)
         </h1>
-        <p className="text-slate-500 text-sm">
+        <p className="text-slate-500 text-sm mt-1">
           សង្ខេបទិន្នន័យសាលារៀន និងវត្តមានសិស្ស
         </p>
       </div>
 
+      {/* Cards Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((card, idx) => {
+        {cards.map((card) => {
           const Icon = card.icon;
           return (
             <div
-              key={idx}
+              key={card.id}
               className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between"
             >
               <div>
@@ -98,6 +138,57 @@ export default function Dashboard() {
             </div>
           );
         })}
+      </div>
+
+      {/* Weekly Attendance Bar Chart */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-800">
+              ប្រវត្តិវត្តមានប្រចាំសប្តាហ៍ (%)
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              ស្ថិតិប្រៀបធៀបពីថ្ងៃចន្ទ ដល់ ថ្ងៃសុក្រ
+            </p>
+          </div>
+        </div>
+
+        <div className="h-72 w-full pt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={stats.weeklyData}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke="#F1F5F9"
+              />
+              <XAxis
+                dataKey="day"
+                tickLine={false}
+                axisLine={false}
+                className="text-xs font-medium text-slate-500"
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                className="text-xs font-medium text-slate-500"
+                domain={[0, 100]}
+              />
+              <Tooltip cursor={{ fill: "#F8FAFC" }} />
+              <Bar
+                dataKey="present"
+                name="វត្តមាន (%)"
+                fill="#10B981"
+                radius={[6, 6, 0, 0]}
+              />
+              <Bar
+                dataKey="absent"
+                name="អវត្តមាន (%)"
+                fill="#EF4444"
+                radius={[6, 6, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );
