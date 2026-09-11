@@ -12,6 +12,8 @@ import {
   ArrowRightLeft,
   CheckSquare,
   Square,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import axiosInstance from "../api/axiosInstance";
 
@@ -19,6 +21,7 @@ export default function StudentManagement() {
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -26,6 +29,7 @@ export default function StudentManagement() {
 
   // States សម្រាប់ Search & Pagination
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -49,16 +53,42 @@ export default function StudentManagement() {
 
   const [formData, setFormData] = useState(initialFormState);
 
+  // អនុគមន៍សម្រាប់ Auto Generate អត្តលេខសិស្ស (Preview ទម្រង់ STU-1001, STU-1002)
+  const generateAutoStudentId = () => {
+    if (!students || students.length === 0) return "STU-1001";
+
+    // ស្វែងរកលេខ STU-XXXX ធំបំផុតដែលមានស្រាប់ក្នុង Table
+    let maxNum = 1000;
+    students.forEach((st) => {
+      if (st.studentId && st.studentId.startsWith("STU-")) {
+        const num = parseInt(st.studentId.split("-")[1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+
+    return `STU-${maxNum + 1}`;
+  };
+
+  // Handle Search Debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // ទាញយកបញ្ជីសិស្សតាម Search & Page
   const fetchStudents = async () => {
     try {
       setLoading(true);
       const res = await axiosInstance.get(
-        `/students?page=${page}&limit=10&search=${search}&classId=${selectedClass}`,
+        `/students?page=${page}&limit=10&search=${debouncedSearch}&classId=${selectedClass}`,
       );
-      setStudents(res.data.students);
-      setTotalPages(res.data.pages);
-      setTotalStudents(res.data.totalStudents);
+      setStudents(res.data.students || []);
+      setTotalPages(res.data.pages || 1);
+      setTotalStudents(res.data.totalStudents || 0);
     } catch (error) {
       toast.error("មានបញ្ហាក្នុងការទាញយកទិន្នន័យសិស្ស");
     } finally {
@@ -70,7 +100,7 @@ export default function StudentManagement() {
   const fetchClasses = async () => {
     try {
       const res = await axiosInstance.get("/classes");
-      setClasses(res.data);
+      setClasses(res.data || []);
     } catch (error) {
       toast.error("មិនអាចទាញយកទិន្នន័យថ្នាក់បានទេ");
     }
@@ -82,8 +112,17 @@ export default function StudentManagement() {
 
   useEffect(() => {
     fetchStudents();
-    setSelectedStudentIds([]); // Clear selection when filter/page changes
-  }, [page, search, selectedClass]);
+    setSelectedStudentIds([]);
+  }, [page, debouncedSearch, selectedClass]);
+
+  // Clean memory URL ពេលប្តូររូប
+  useEffect(() => {
+    return () => {
+      if (previewImage && previewImage.startsWith("blob:")) {
+        URL.revokeObjectURL(previewImage);
+      }
+    };
+  }, [previewImage]);
 
   // Checkbox Handlers
   const handleSelectAll = () => {
@@ -103,9 +142,13 @@ export default function StudentManagement() {
   // Modal Handlers
   const handleOpenCreateModal = () => {
     setEditingId(null);
-    setFormData(initialFormState);
     setSelectedFile(null);
     setPreviewImage(null);
+    // Auto generate អត្តលេខសិស្សទម្រង់ STU-1001 ទុកជាមុន ពេលចុចបន្ថែមថ្មី
+    setFormData({
+      ...initialFormState,
+      studentId: generateAutoStudentId(),
+    });
     setShowModal(true);
   };
 
@@ -137,8 +180,19 @@ export default function StudentManagement() {
     e.preventDefault();
     if (!formData.classId) return toast.error("សូមជ្រើសរើសថ្នាក់រៀន");
 
+    setSubmitting(true);
     const data = new FormData();
-    Object.keys(formData).forEach((key) => data.append(key, formData[key]));
+
+    Object.keys(formData).forEach((key) => {
+      if (key === "studentId") {
+        if (formData.studentId && formData.studentId.trim() !== "") {
+          data.append("studentId", formData.studentId.trim());
+        }
+      } else {
+        data.append(key, formData[key]);
+      }
+    });
+
     if (selectedFile) data.append("photo", selectedFile);
 
     try {
@@ -163,6 +217,8 @@ export default function StudentManagement() {
       toast.error(
         error.response?.data?.message || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ",
       );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -178,7 +234,6 @@ export default function StudentManagement() {
     }
   };
 
-  // Submit Bulk Transfer
   const handleBulkTransferSubmit = async (e) => {
     e.preventDefault();
     if (!targetClassId) return toast.error("សូមជ្រើសរើសថ្នាក់គោលដៅ");
@@ -217,7 +272,6 @@ export default function StudentManagement() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Bulk Transfer Button */}
           {selectedStudentIds.length > 0 && (
             <button
               onClick={() => setShowTransferModal(true)}
@@ -345,7 +399,11 @@ export default function StudentManagement() {
                       />
                     </td>
                     <td className="p-4 font-semibold text-blue-600">
-                      {st.studentId}
+                      {st.studentId || (
+                        <span className="text-slate-400 font-normal italic">
+                          មិនទាន់មាន
+                        </span>
+                      )}
                     </td>
                     <td className="p-4">
                       <p className="font-medium text-slate-800">
@@ -457,18 +515,35 @@ export default function StudentManagement() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    អត្តលេខសិស្ស
-                  </label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-medium text-slate-700">
+                      អត្តលេខសិស្ស
+                    </label>
+                    {!editingId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            studentId: generateAutoStudentId(),
+                          })
+                        }
+                        className="text-[11px] text-blue-600 hover:underline flex items-center gap-1"
+                        title="បង្កើតលេខថ្មី"
+                      >
+                        <RefreshCw size={10} />
+                        <span>បង្កើតថ្មី</span>
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
-                    required
-                    placeholder="STU001"
+                    placeholder="ស្វ័យប្រវត្តិ (Auto-generated)"
                     value={formData.studentId}
                     onChange={(e) =>
                       setFormData({ ...formData, studentId: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-blue-700 bg-slate-50/50"
                   />
                 </div>
                 <div>
@@ -581,9 +656,11 @@ export default function StudentManagement() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-500/25"
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-500/25 disabled:opacity-50"
                 >
-                  {editingId ? "រក្សាការកែប្រែ" : "រក្សាទុក"}
+                  {submitting && <Loader2 className="animate-spin" size={16} />}
+                  <span>{editingId ? "រក្សាការកែប្រែ" : "រក្សាទុក"}</span>
                 </button>
               </div>
             </form>
@@ -613,7 +690,7 @@ export default function StudentManagement() {
                 <span className="font-bold text-blue-800">
                   {selectedStudentIds.length}
                 </span>{" "}
-                នាក់ ដើមផ្ទេរទៅថ្នាក់ថ្មី។
+                នាក់ ដើម្បីផ្ទេរទៅថ្នាក់ថ្មី។
               </div>
 
               <div>
@@ -646,9 +723,14 @@ export default function StudentManagement() {
                 <button
                   type="submit"
                   disabled={transferring}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium shadow-lg shadow-amber-500/25 disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium shadow-lg shadow-amber-500/25 disabled:opacity-50"
                 >
-                  {transferring ? "កំពុងផ្ទេរ..." : "រក្សាទុកការផ្ទេរ"}
+                  {transferring && (
+                    <Loader2 className="animate-spin" size={16} />
+                  )}
+                  <span>
+                    {transferring ? "កំពុងផ្ទេរ..." : "រក្សាទុកការផ្ទេរ"}
+                  </span>
                 </button>
               </div>
             </form>

@@ -1,8 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap');
-
+@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700;900&family=Moul&display=swap');
 @import "tailwindcss";
 
 body {
   font-family: 'Kantumruy Pro', sans-serif;
   background-color: #f8fafc;
+}
+
+@layer utilities {
+  .font-moul {
+    font-family: 'Moul', 'Khmer OS Moul Light', 'Khmer OS Moul', serif;
+  }
+  .font-battambang {
+    font-family: 'Battambang', 'Khmer OS Battambang', sans-serif;
+  }
+}
+
+@media print {
+  /* បង្ខំឱ្យ Browser បង្ហាញពណ៌ Background និង Border ឱ្យច្បាស់ */
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ការពារកុំឱ្យកាតសិស្សដាច់ពាក់កណ្តាលទំព័រ (Break Page) */
+  .print\:break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }
