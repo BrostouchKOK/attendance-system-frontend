@@ -41,23 +41,22 @@ export default function StudentManagement() {
   const [targetClassId, setTargetClassId] = useState("");
   const [transferring, setTransferring] = useState(false);
 
+  // 💡 បានដក dob ចេញពី initialFormState
   const initialFormState = {
     studentId: "",
     nameKhmer: "",
     nameLatin: "",
     gender: "Male",
-    dob: "",
     classId: "",
     parentPhone: "",
   };
 
   const [formData, setFormData] = useState(initialFormState);
 
-  // អនុគមន៍សម្រាប់ Auto Generate អត្តលេខសិស្ស (Preview ទម្រង់ STU-1001, STU-1002)
+  // អនុគមន៍សម្រាប់ Auto Generate អត្តលេខសិស្ស
   const generateAutoStudentId = () => {
     if (!students || students.length === 0) return "STU-1001";
 
-    // ស្វែងរកលេខ STU-XXXX ធំបំផុតដែលមានស្រាប់ក្នុង Table
     let maxNum = 1000;
     students.forEach((st) => {
       if (st.studentId && st.studentId.startsWith("STU-")) {
@@ -84,7 +83,7 @@ export default function StudentManagement() {
     try {
       setLoading(true);
       const res = await axiosInstance.get(
-        `/students?page=${page}&limit=10&search=${debouncedSearch}&classId=${selectedClass}`,
+        `/students?page=${page}&limit=10&search=${debouncedSearch}&classId=${selectedClass}`
       );
       setStudents(res.data.students || []);
       setTotalPages(res.data.pages || 1);
@@ -135,7 +134,7 @@ export default function StudentManagement() {
 
   const handleSelectStudent = (id) => {
     setSelectedStudentIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
@@ -144,7 +143,6 @@ export default function StudentManagement() {
     setEditingId(null);
     setSelectedFile(null);
     setPreviewImage(null);
-    // Auto generate អត្តលេខសិស្សទម្រង់ STU-1001 ទុកជាមុន ពេលចុចបន្ថែមថ្មី
     setFormData({
       ...initialFormState,
       studentId: generateAutoStudentId(),
@@ -152,6 +150,7 @@ export default function StudentManagement() {
     setShowModal(true);
   };
 
+  // 💡 បានដក dob ចេញពី handleOpenEditModal
   const handleOpenEditModal = (st) => {
     setEditingId(st._id);
     setFormData({
@@ -159,7 +158,6 @@ export default function StudentManagement() {
       nameKhmer: st.nameKhmer || "",
       nameLatin: st.nameLatin || "",
       gender: st.gender || "Male",
-      dob: st.dob ? st.dob.split("T")[0] : "",
       classId: st.classId?._id || st.classId || "",
       parentPhone: st.parentPhone || "",
     });
@@ -176,6 +174,7 @@ export default function StudentManagement() {
     }
   };
 
+  // 💡 បានសំអាត handleSubmit (លុបលក្ខខណ្ឌ dob)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.classId) return toast.error("សូមជ្រើសរើសថ្នាក់រៀន");
@@ -215,7 +214,7 @@ export default function StudentManagement() {
       fetchStudents();
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ",
+        error.response?.data?.message || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ"
       );
     } finally {
       setSubmitting(false);
@@ -251,7 +250,7 @@ export default function StudentManagement() {
       fetchStudents();
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "មានបញ្ហាក្នុងការផ្ទេរថ្នាក់សិស្ស",
+        error.response?.data?.message || "មានបញ្ហាក្នុងការផ្ទេរថ្នាក់សិស្ស"
       );
     } finally {
       setTransferring(false);
@@ -599,6 +598,7 @@ export default function StudentManagement() {
                 </div>
               </div>
 
+              {/* 💡 កែប្រែ៖ រក្សាទុកតែភេទ និងដកកញ្ចប់ Input ថ្ងៃខែឆ្នាំកំណើតចេញ */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -617,33 +617,18 @@ export default function StudentManagement() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    ថ្ងៃខែឆ្នាំកំណើត
+                    លេខទូរស័ព្ទអាណាព្យាបាល
                   </label>
                   <input
-                    type="date"
-                    required
-                    value={formData.dob}
+                    type="text"
+                    placeholder="012345678"
+                    value={formData.parentPhone}
                     onChange={(e) =>
-                      setFormData({ ...formData, dob: e.target.value })
+                      setFormData({ ...formData, parentPhone: e.target.value })
                     }
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  លេខទូរស័ព្ទអាណាព្យាបាល
-                </label>
-                <input
-                  type="text"
-                  placeholder="012345678"
-                  value={formData.parentPhone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, parentPhone: e.target.value })
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -659,7 +644,9 @@ export default function StudentManagement() {
                   disabled={submitting}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-500/25 disabled:opacity-50"
                 >
-                  {submitting && <Loader2 className="animate-spin" size={16} />}
+                  {submitting && (
+                    <Loader2 className="animate-spin" size={16} />
+                  )}
                   <span>{editingId ? "រក្សាការកែប្រែ" : "រក្សាទុក"}</span>
                 </button>
               </div>

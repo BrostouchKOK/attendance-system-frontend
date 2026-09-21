@@ -1,30 +1,136 @@
 import { useState, useEffect, useRef } from "react";
 import { useReactToPrint } from "react-to-print";
-import { Printer, Users } from "lucide-react";
+import { Printer, Users, FileText, Download, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { toJpeg } from "html-to-image";
+import jsPDF from "jspdf";
 import axiosInstance from "../api/axiosInstance";
 
 // Component សម្រាប់កាតសិស្សម្នាក់ៗ (Single Card)
-const SingleStudentCard = ({ st, formatDate }) => {
+const SingleStudentCard = ({ st }) => {
   const cardRef = useRef(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingJpg, setDownloadingJpg] = useState(false);
 
   const handleSinglePrint = useReactToPrint({
     contentRef: cardRef,
     documentTitle: `Student_Card_${st.customStudentId || st.studentId}`,
   });
 
+  // 💡 1. អនុគមន៍ទាញយក PDF ទំហំ 8.5cm x 5.4cm (85mm x 54mm) 300 DPI
+  const handleDownloadPdf = async () => {
+    if (!cardRef.current) return;
+    setDownloadingPdf(true);
+
+    try {
+      const imgData = await toJpeg(cardRef.current, {
+        quality: 1.0,
+        pixelRatio: 4,
+        backgroundColor: "#ffffff",
+      });
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: [85, 54],
+      });
+
+      pdf.addImage(imgData, "JPEG", 0, 0, 85, 54);
+      pdf.save(`Student_Card_${st.customStudentId || st.studentId || "card"}.pdf`);
+
+      toast.success("ទាញយកកាតជា PDF រួចរាល់!");
+    } catch (error) {
+      console.error("PDF Download Error:", error);
+      toast.error("មានបញ្ហាក្នុងការទាញយក PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  // 💡 2. អនុគមន៍ទាញយក JPG កម្រិតច្បាស់ HD (300 DPI = 1004px x 638px) ទំហំ 8.5cm x 5.4cm
+  const handleDownloadJpg = async () => {
+    if (!cardRef.current) return;
+    setDownloadingJpg(true);
+
+    try {
+      const rawDataUrl = await toJpeg(cardRef.current, {
+        quality: 1.0,
+        pixelRatio: 4,
+        backgroundColor: "#ffffff",
+      });
+
+      const img = new Image();
+      img.src = rawDataUrl;
+      await new Promise((resolve) => (img.onload = resolve));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 1004; // 8.5cm លើ 300 DPI
+      canvas.height = 638; // 5.4cm លើ 300 DPI
+      const ctx = canvas.getContext("2d");
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const finalDataUrl = canvas.toDataURL("image/jpeg", 0.98);
+      const link = document.createElement("a");
+      const fileName = `Student_Card_${st.customStudentId || st.studentId || "card"}.jpg`;
+      link.download = fileName;
+      link.href = finalDataUrl;
+      link.click();
+
+      toast.success("ទាញយកកាតជា JPG រួចរាល់!");
+    } catch (error) {
+      console.error("JPG Download Error:", error);
+      toast.error("មានបញ្ហាក្នុងការទាញយក JPG");
+    } finally {
+      setDownloadingJpg(false);
+    }
+  };
+
   return (
     <div className="flex flex-col items-center gap-2">
-      {/* ប៊ូតុង Print សម្រាប់សិស្សម្នាក់នេះ */}
-      <button
-        onClick={() => handleSinglePrint()}
-        className="print:hidden flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded-lg shadow transition cursor-pointer self-end"
-      >
-        <Printer size={13} />
-        <span>Print កាតនេះ</span>
-      </button>
+      <div className="print:hidden flex items-center gap-1.5 self-end">
+        {/* ប៊ូតុងទាញយក JPG */}
+        <button
+          onClick={handleDownloadJpg}
+          disabled={downloadingJpg || downloadingPdf}
+          className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg shadow transition cursor-pointer"
+          title="ទាញយកជា JPG"
+        >
+          {downloadingJpg ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <Download size={13} />
+          )}
+          <span>{downloadingJpg ? "កំពុងទាញ..." : "JPG"}</span>
+        </button>
 
-      {/* រូបរាងកាតសិស្ស */}
+        {/* ប៊ូតុងទាញយក PDF */}
+        <button
+          onClick={handleDownloadPdf}
+          disabled={downloadingJpg || downloadingPdf}
+          className="flex items-center gap-1 px-2.5 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg shadow transition cursor-pointer"
+          title="ទាញយកជា PDF"
+        >
+          {downloadingPdf ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <FileText size={13} />
+          )}
+          <span>{downloadingPdf ? "កំពុងទាញ..." : "PDF"}</span>
+        </button>
+
+        {/* ប៊ូតុង Print */}
+        <button
+          onClick={() => handleSinglePrint()}
+          className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded-lg shadow transition cursor-pointer"
+        >
+          <Printer size={13} />
+          <span>Print</span>
+        </button>
+      </div>
+
       <div
         ref={cardRef}
         style={{
@@ -32,15 +138,14 @@ const SingleStudentCard = ({ st, formatDate }) => {
           height: "5.4cm",
           boxSizing: "border-box",
         }}
-        className="bg-white border-[3px] border-blue-700 rounded-sm relative p-1.5 flex flex-col justify-between overflow-hidden shadow-sm print:shadow-none print:break-inside-avoid font-battambang"
+        className="bg-white rounded-sm relative p-1.5 flex flex-col justify-between overflow-hidden shadow-sm print:shadow-none print:break-inside-avoid font-battambang"
       >
-        {/* Blue Vertical Borders */}
+        {/* បន្ទាត់ពណ៌ខៀវអមសងខាងឆ្វេង-ស្តាំ */}
         <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-blue-700"></div>
         <div className="absolute top-0 right-0 bottom-0 w-1.5 bg-blue-700"></div>
 
-        {/* Header Section */}
-        <div className="flex items-start gap-1.5 pl-2 pr-2 pt-0">
-          {/* Logo */}
+        {/* 💡 បង្កើន pl-4 ដើម្បីរំកិល Logo និង Header ចេញពីបន្ទាត់ឆ្វេងបន្តិច */}
+        <div className="flex items-start gap-1.5 pl-4 pr-2 pt-0">
           <img
             src="/school-logo.png"
             alt="Logo"
@@ -51,30 +156,25 @@ const SingleStudentCard = ({ st, formatDate }) => {
             }}
           />
           <div className="flex-1 text-center">
-            {/* ឈ្មោះសាលាខ្មែរ */}
             <h2 className="text-[11.5px] font-moul text-amber-500 leading-snug">
               សាលាសិលាមាសនៃអង្គការក្តីសង្ឃឹម
             </h2>
-            {/* ឈ្មោះសាលាអង់គ្លេស */}
-            <h3 className="text-[10.5px] font-['Arial_Black',sans-serif] text-amber-500 leading-tight tracking-tight uppercase">
+            <h3 className="text-[11px] font-['Arial_Black',sans-serif] text-amber-500 leading-tight tracking-tight uppercase">
               GOLDSTONE SCHOOL OF HOPE
             </h3>
 
-            {/* បន្ទាត់ពណ៌ខៀវ */}
             <div className="flex justify-center my-0.5">
               <div className="w-[85%] h-[2px] bg-blue-700"></div>
             </div>
 
-            {/* Title អង់គ្លេស */}
-            <p className="text-[10px] font-['Arial_Black',sans-serif] text-blue-700 tracking-wider uppercase leading-tight">
+            <p className="text-[11px] font-['Arial_Black',sans-serif] text-blue-700 tracking-wider uppercase leading-tight">
               STUDENT IDENTITY CARD
             </p>
           </div>
         </div>
 
-        {/* Body Content Section */}
-        <div className="flex gap-2 pl-2 pr-2 my-auto items-center">
-          {/* Student Photo */}
+        {/* 💡 បង្កើន pl-4 ដើម្បីរំកិលរូបថត និងព័ត៌មានសិស្សមកខាងស្តាំបន្តិច */}
+        <div className="flex gap-2 pl-4 pr-2 my-auto items-center mt-1">
           <div className="w-[2.2cm] h-[2.7cm] border border-slate-300 shrink-0 bg-slate-100 overflow-hidden shadow-xs">
             <img
               src={st.photoUrl || "/default-avatar.png"}
@@ -87,50 +187,58 @@ const SingleStudentCard = ({ st, formatDate }) => {
             />
           </div>
 
-          {/* Student Info */}
-          <div className="flex-1 text-center space-y-0.5 leading-snug">
-            {/* ឈ្មោះសិស្សខ្មែរ */}
-            <h4 className="text-[14.5px] font-moul text-black leading-tight">
+          <div className="flex-1 text-center space-y-1 leading-snug">
+            <h4 className="text-[15px] font-moul text-black leading-tight">
               {st.nameKhmer}
             </h4>
-            {/* ឈ្មោះឡាតាំង */}
-            <p className="text-[11.5px] font-['Arial_Black',sans-serif] text-black uppercase tracking-wide">
+            <p className="text-[12px] font-['Arial_Black',sans-serif] text-black uppercase tracking-wide">
               {st.nameLatin}
             </p>
-            {/* ថ្ងៃខែឆ្នាំកំណើត, ថ្នាក់ទី, ឆ្នាំសិក្សា */}
-            <p className="text-[12px] text-black font-medium leading-tight">
-              ថ្ងៃខែឆ្នាំកំណើត:{" "}
-              <span className="font-bold text-[12.5px]">
-                {formatDate(st.dateOfBirth || st.dob)}
-              </span>
-            </p>
-            <p className="text-[12px] text-black font-medium leading-tight">
+
+            <p className="text-[14px] text-black font-medium leading-tight mt-0.5">
               ថ្នាក់ទី:{" "}
-              <span className="font-bold text-[12.5px]">
+              <span
+                className="font-medium text-[13px]"
+                style={{ fontFamily: "Arial, sans-serif" }}
+              >
                 {st.classId?.className || "N/A"}
               </span>
             </p>
-            <p className="text-[12px] text-black font-medium leading-tight">
+
+            <p
+              className="text-[12.5px] text-black font-medium leading-tight mt-3"
+              style={{ fontFamily: "'Khmer OS Bokor', cursive" }}
+            >
               ឆ្នាំសិក្សា:{" "}
-              <span className="font-bold text-[12.5px]">
-                {st.academicYear || "២០២៥-២០២៦"}
+              <span className="font-medium text-[13px]">
+                {st.academicYear || "២០២៦-២០២៧"}
               </span>
             </p>
           </div>
         </div>
 
-        {/* Footer Section */}
-        <div className="w-full px-1 pb-0.5">
-          {/* អត្តលេខ */}
-          <div className="flex justify-between items-end mb-0.5 px-1">
-            <span className="text-[12.5px] font-bold text-red-600 font-battambang">
-              អត្តលេខ: {st.customStudentId || st.studentId}
+        {/* 💡 បង្កើន pl-4 សម្រាប់ផ្នែក Footer ខាងក្រោម */}
+        <div className="w-full pl-4 pr-2 pb-0.5">
+          <div className="flex justify-between items-end mb-0.5">
+            <span
+              className="text-[12px] font-bold text-red-600"
+              style={{ fontFamily: "'Khmer OS Bokor', cursive" }}
+            >
+              អត្តលេខ:{" "}
+              <span style={{ fontFamily: "Arial, sans-serif" }}>
+                {st.customStudentId || st.studentId}
+              </span>
             </span>
           </div>
-          {/* អាសយដ្ឋាន Footer */}
-          <p className="text-[11px] text-black text-center leading-tight font-battambang font-medium whitespace-nowrap overflow-hidden tracking-tighter">
-            ផ្ទះលេខ៤១, ផ្លូវ៣១៧ កែង៥៧០, សង្កាត់បឹងកក់២, ខណ្ឌទួលគោក,
-            រាជធានីភ្នំពេញ
+
+          <p
+            className="text-[12px] text-black text-justify font-battambang font-medium leading-tight whitespace-nowrap overflow-visible"
+            style={{
+              lineHeight: "1",
+              wordSpacing: "1px",
+            }}
+          >
+            ផ្ទះលេខ៤១, ផ្លូវ៣១៧ កែង៥៧០, សង្កាត់បឹងកក់២, ខណ្ឌទួលគោក
           </p>
         </div>
       </div>
@@ -149,43 +257,6 @@ export default function StudentIDCards() {
     contentRef: componentRef,
     documentTitle: "All_Student_ID_Cards",
   });
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-
-    const khmerMonths = [
-      "មករា",
-      "កុម្ភៈ",
-      "មីនា",
-      "មេសា",
-      "ឧសភា",
-      "មិថុនា",
-      "កក្កដា",
-      "សីហា",
-      "កញ្ញា",
-      "តុលា",
-      "វិច្ឆិកា",
-      "ធ្នូ",
-    ];
-
-    const toKhmerNum = (num) => {
-      const khmerNums = ["០", "១", "២", "៣", "៤", "៥", "៦", "៧", "៨", "៩"];
-      return num
-        .toString()
-        .split("")
-        .map((n) => khmerNums[parseInt(n)] || n)
-        .join("");
-    };
-
-    const day = date.getDate();
-    const formattedDay = day < 10 ? `០${toKhmerNum(day)}` : toKhmerNum(day);
-    const month = khmerMonths[date.getMonth()];
-    const year = toKhmerNum(date.getFullYear());
-
-    return `${formattedDay}-${month}-${year}`;
-  };
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -207,9 +278,8 @@ export default function StudentIDCards() {
     const fetchStudents = async () => {
       setLoading(true);
       try {
-        // បន្ថែម limit=1000 ដើម្បីទាញយកសិស្សទាំងអស់ក្នុងថ្នាក់នោះដោយមិនជាប់ Pagination ត្រឹម 10 នាក់
         const { data } = await axiosInstance.get(
-          `/students?classId=${selectedClass}&limit=1000`,
+          `/students?classId=${selectedClass}&limit=1000`
         );
         if (Array.isArray(data)) {
           setStudents(data);
@@ -231,7 +301,6 @@ export default function StudentIDCards() {
 
   return (
     <div className="space-y-6">
-      {/* Control Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm print:hidden">
         <div>
           <h1 className="text-xl font-bold text-slate-800">បោះពុម្ពកាតសិស្ស</h1>
@@ -267,7 +336,6 @@ export default function StudentIDCards() {
         </div>
       </div>
 
-      {/* Printable Container */}
       <div className="bg-slate-100 p-6 rounded-2xl print:bg-transparent print:p-0">
         {loading ? (
           <div className="text-center py-12 text-slate-500 font-medium">
@@ -280,11 +348,7 @@ export default function StudentIDCards() {
           >
             {Array.isArray(students) && students.length > 0 ? (
               students.map((st) => (
-                <SingleStudentCard
-                  key={st._id}
-                  st={st}
-                  formatDate={formatDate}
-                />
+                <SingleStudentCard key={st._id} st={st} />
               ))
             ) : (
               <div className="col-span-full text-center py-12 text-slate-500">
